@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "./ui/button";
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client - replace with your actual Supabase URL and anon key if they are not auto-injected
-// Ensure these are available as environment variables in your Vite project (e.g., VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+// These should be automatically injected by the Blink environment when Supabase is connected.
+// VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are the standard names.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Supabase URL or Anon Key is missing. Please check your .env file or environment variables.");
+let supabase: SupabaseClient | null = null;
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+} else {
+  console.error(
+    "Supabase URL or Anon Key is missing. Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set."
+  );
 }
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const currencyPairs = [
   "eur.usd",
@@ -41,9 +44,9 @@ export default function TradingDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function fetchDataAndSignal() {
-    if (!supabaseUrl || !supabaseAnonKey) {
-      setError("Supabase not configured. Cannot fetch data.");
+  const fetchDataAndSignal = useCallback(async () => {
+    if (!supabase) {
+      setError("Supabase client not initialized. Cannot fetch data.");
       setLoading(false);
       return;
     }
@@ -52,19 +55,21 @@ export default function TradingDashboard() {
     setData(null);
 
     try {
+      // Ensure the function name matches the deployed Supabase function name
       const { data: responseData, error: functionError } = await supabase.functions.invoke(
-        "yfinance",
+        "yfinance", // This MUST match the deployed function name
         {
           body: { pair: selectedPair, timeframe: selectedTimeframe },
         }
       );
 
       if (functionError) {
-        throw new Error(`Supabase function error: ${functionError.message}`);
+        throw new Error(`Function invocation error: ${functionError.message}`);
       }
       
+      // The yfinance function returns data directly, or an error object { error: string }
       if (responseData.error) {
-        throw new Error(`Data fetching error: ${responseData.error}`);
+        throw new Error(`Data fetching error from function: ${responseData.error}`);
       }
 
       setData(responseData as SignalData);
@@ -73,15 +78,15 @@ export default function TradingDashboard() {
       setError((e as Error).message || "Failed to fetch data and signal.");
     }
     setLoading(false);
-  }
-
-  useEffect(() => {
-    // Fetch data on initial load
-    fetchDataAndSignal();
   }, [selectedPair, selectedTimeframe]);
 
+  useEffect(() => {
+    // Fetch data on initial load and when pair/timeframe changes
+    fetchDataAndSignal();
+  }, [fetchDataAndSignal]);
+
   return (
-    <div className="max-w-lg mx-auto p-6 bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl shadow-2xl text-slate-100">
+    <div className="max-w-lg mx-auto p-6 bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl shadow-2xl text-slate-100 font-sans">
       <h1 className="text-3xl font-bold mb-8 text-center text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300">
         AI Trading Signal Bot
       </h1>
@@ -95,10 +100,11 @@ export default function TradingDashboard() {
             id="pair"
             value={selectedPair}
             onChange={(e) => setSelectedPair(e.target.value)}
-            className="bg-slate-700 border border-slate-600 text-slate-100 rounded-md px-3 py-2 w-full focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all duration-150"
+            className="bg-slate-700 border border-slate-600 text-slate-100 rounded-md px-3 py-2 w-full focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all duration-150 appearance-none"
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%237dd3fc' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1.5em 1.5em'}}
           >
             {currencyPairs.map((pair) => (
-              <option key={pair} value={pair} className="bg-slate-800">
+              <option key={pair} value={pair} className="bg-slate-800 text-slate-100">
                 {pair.toUpperCase()}
               </option>
             ))}
@@ -113,10 +119,11 @@ export default function TradingDashboard() {
             id="timeframe"
             value={selectedTimeframe}
             onChange={(e) => setSelectedTimeframe(e.target.value)}
-            className="bg-slate-700 border border-slate-600 text-slate-100 rounded-md px-3 py-2 w-full focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all duration-150"
+            className="bg-slate-700 border border-slate-600 text-slate-100 rounded-md px-3 py-2 w-full focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all duration-150 appearance-none"
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%237dd3fc' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1.5em 1.5em'}}
           >
             {timeframes.map((tf) => (
-              <option key={tf} value={tf} className="bg-slate-800">
+              <option key={tf} value={tf} className="bg-slate-800 text-slate-100">
                 {tf}
               </option>
             ))}
@@ -124,8 +131,8 @@ export default function TradingDashboard() {
         </div>
       </div>
 
-      <div className="mb-8 p-6 bg-slate-800 rounded-lg shadow-md min-h-[200px] flex flex-col justify-center">
-        <h2 className="text-xl font-semibold mb-4 text-sky-400">Trading Signal & Data</h2>
+      <div className="mb-8 p-6 bg-slate-800/70 rounded-lg shadow-md min-h-[220px] flex flex-col justify-center backdrop-blur-sm">
+        <h2 className="text-xl font-semibold mb-4 text-sky-400/90">Trading Signal & Data</h2>
         {loading && (
           <div className="flex items-center justify-center text-sky-400">
             <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-sky-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -142,10 +149,10 @@ export default function TradingDashboard() {
               <span className="font-medium text-slate-300">Signal:</span>
               <span
                 className={`px-3 py-1 rounded-full text-sm font-semibold ${data.signal.signal === "Buy"
-                    ? "bg-green-500 text-green-900"
+                    ? "bg-green-500/80 text-green-50"
                     : data.signal.signal === "Sell"
-                    ? "bg-red-500 text-red-900"
-                    : "bg-yellow-500 text-yellow-900"
+                    ? "bg-red-500/80 text-red-50"
+                    : "bg-yellow-500/80 text-yellow-50"
                   }`}
               >
                 {data.signal.signal}
@@ -153,23 +160,24 @@ export default function TradingDashboard() {
             </div>
             <div className="flex items-center justify-between">
               <span className="font-medium text-slate-300">Confidence:</span>
-              <span className="text-sky-300">{(data.signal.confidence * 100).toFixed(1)}%</span>
+              <span className="text-sky-300 font-semibold">{(data.signal.confidence * 100).toFixed(1)}%</span>
+            </div>
+            <hr className="border-slate-700 my-2" />
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-slate-400 text-sm">Last Price:</span>
+              <span className="text-slate-200 text-sm">{data.lastPrice?.toFixed(5) ?? 'N/A'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="font-medium text-slate-300">Last Price:</span>
-              <span className="text-sky-300">{data.lastPrice?.toFixed(5) ?? 'N/A'}</span>
+              <span className="font-medium text-slate-400 text-sm">RSI (14):</span>
+              <span className="text-slate-200 text-sm">{data.rsi?.toFixed(2) ?? 'N/A'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="font-medium text-slate-300">RSI (14):</span>
-              <span className="text-sky-300">{data.rsi?.toFixed(2) ?? 'N/A'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-slate-300">MACD:</span>
-              <span className="text-sky-300">{data.macd?.toFixed(4) ?? 'N/A'}</span>
+              <span className="font-medium text-slate-400 text-sm">MACD:</span>
+              <span className="text-slate-200 text-sm">{data.macd?.toFixed(4) ?? 'N/A'}</span>
             </div>
              <div className="flex items-center justify-between">
-              <span className="font-medium text-slate-300">Stochastic (14):</span>
-              <span className="text-sky-300">{data.stochastic?.toFixed(2) ?? 'N/A'}</span>
+              <span className="font-medium text-slate-400 text-sm">Stochastic (14):</span>
+              <span className="text-slate-200 text-sm">{data.stochastic?.toFixed(2) ?? 'N/A'}</span>
             </div>
           </div>
         )}
@@ -180,8 +188,8 @@ export default function TradingDashboard() {
 
       <Button 
         onClick={fetchDataAndSignal} 
-        disabled={loading || !supabaseUrl || !supabaseAnonKey}
-        className="w-full bg-sky-500 hover:bg-sky-600 text-white font-semibold py-3 rounded-lg transition-all duration-150 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={loading || !supabase}
+        className="w-full bg-sky-500 hover:bg-sky-600 text-white font-semibold py-3 rounded-lg transition-all duration-150 shadow-md hover:shadow-lg focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {loading ? (
           <>
@@ -193,8 +201,8 @@ export default function TradingDashboard() {
           </>
         ) : "Refresh Data & Signal"}
       </Button>
-      {(!supabaseUrl || !supabaseAnonKey) && 
-        <p className="text-xs text-red-400 mt-2 text-center">Supabase URL/Key missing. App may not function correctly.</p>}
+      {!supabase && 
+        <p className="text-xs text-red-400 mt-3 text-center">Supabase client not initialized. App may not function correctly. Check console.</p>}
     </div>
   );
 }
