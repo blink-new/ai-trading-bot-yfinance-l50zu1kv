@@ -2,10 +2,25 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "./ui/button";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// These should be automatically injected by the Blink environment when Supabase is connected.
-// VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are the standard names.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Helper to get env variable from multiple sources
+function getEnvVar(key: string): string | undefined {
+  // Try import.meta.env
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+    return import.meta.env[key];
+  }
+  // Try window
+  if (typeof window !== 'undefined' && (window as any)[key]) {
+    return (window as any)[key];
+  }
+  // Try process.env (for SSR or fallback)
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  return undefined;
+}
+
+const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
 let supabase: SupabaseClient | null = null;
 if (supabaseUrl && supabaseAnonKey) {
@@ -201,8 +216,8 @@ export default function TradingDashboard() {
           </>
         ) : "Refresh Data & Signal"}
       </Button>
-      {!supabase && 
-        <p className="text-xs text-red-400 mt-3 text-center">Supabase client not initialized. App may not function correctly. Check console.</p>}
+      {(!supabaseUrl || !supabaseAnonKey) &&
+        <p className="text-xs text-red-400 mt-3 text-center">Supabase environment variables missing. Please contact support.</p>}
     </div>
   );
 }
